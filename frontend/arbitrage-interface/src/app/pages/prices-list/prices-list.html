@@ -1,1 +1,93 @@
-<p>prices-list works!</p>
+<main class="page-shell">
+  <section class="topbar">
+    <div>
+      <p class="eyebrow">CS2 market monitor</p>
+      <h1>Oportunidades sin item factor</h1>
+      <p class="summary">
+        {{ total() }} resultados entre ${{ activeFilters().min_price | number: '1.2-2' }} y ${{
+          activeFilters().max_price | number: '1.2-2'
+        }}
+      </p>
+    </div>
+
+    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Actualizando...' : 'Actualizar' }}
+    </button>
+  </section>
+
+  <section class="filters-panel">
+    <label>
+      <span>Min USD</span>
+      <input type="number" step="0.01" [(ngModel)]="filters.min_price" />
+    </label>
+
+    <label>
+      <span>Max USD</span>
+      <input type="number" step="0.01" [(ngModel)]="filters.max_price" />
+    </label>
+
+    <label>
+      <span>Límite</span>
+      <input type="number" step="1" [(ngModel)]="filters.limit" />
+    </label>
+
+    <label>
+      <span>Orden</span>
+      <select [(ngModel)]="filters.sort">
+        <option value="best_deal">Best deal</option>
+        <option value="lowest_price">Lowest price</option>
+        <option value="most_recent">Most recent</option>
+      </select>
+    </label>
+
+    <label class="checkbox-field">
+      <input type="checkbox" [(ngModel)]="filters.only_no_factor" />
+      <span>Solo sin item factor</span>
+    </label>
+
+    <button type="button" class="apply-button" (click)="refresh()" [disabled]="loading()">
+      Buscar
+    </button>
+  </section>
+
+  @if (loading()) {
+    <section class="status-panel">Cargando oportunidades...</section>
+  } @else if (errorMessage()) {
+    <section class="status-panel status-error">{{ errorMessage() }}</section>
+  } @else if (!hasItems()) {
+    <section class="status-panel">No encontramos oportunidades con esos filtros.</section>
+  } @else {
+    <section class="table-panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Skin</th>
+            <th>Wear</th>
+            <th>CSFloat</th>
+            <th>Steam Ref</th>
+            <th>Item Factor</th>
+            <th>Discount %</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of items(); track item.id) {
+            <tr>
+              <td data-label="Skin">
+                <strong>{{ item.market_hash_name }}</strong>
+              </td>
+              <td data-label="Wear">{{ item.wear | number: '1.5-5' }}</td>
+              <td data-label="CSFloat">${{ item.csfloat_price | number: '1.2-2' }}</td>
+              <td data-label="Steam Ref">${{ item.steam_reference_price | number: '1.2-2' }}</td>
+              <td data-label="Item Factor">${{ item.item_factor | number: '1.2-2' }}</td>
+              <td data-label="Discount %">{{ item.discount_percent | number: '1.2-2' }}%</td>
+              <td data-label="Acción">
+                <a [href]="item.purchase_url" target="_blank" rel="noopener">Comprar</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</main>
