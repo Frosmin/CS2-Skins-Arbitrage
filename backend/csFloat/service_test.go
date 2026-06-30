@@ -62,7 +62,27 @@ func TestMapListingOpportunityFallsBackToBasePriceWhenPredictedMissing(t *testin
 	}
 }
 
-func TestMapListingOpportunityFiltersNoFactor(t *testing.T) {
+func TestMapListingOpportunityKeepsNegativeFactorWhenOnlyNoFactorIsEnabled(t *testing.T) {
+	listing := csfloatListing{
+		ID:    "789",
+		Price: 70,
+		Reference: csfloatReference{
+			BasePrice:      100,
+			PredictedPrice: 90,
+		},
+		Item: csfloatItem{
+			MarketHashName: "USP-S | Ticket to Hell",
+			Wear:           0.09012,
+		},
+	}
+
+	_, ok := mapListingOpportunity(listing, ListingsFilters{OnlyNoFactor: true})
+	if !ok {
+		t.Fatalf("expected negative item factor listing to remain visible")
+	}
+}
+
+func TestMapListingOpportunityFiltersPositiveFactorWhenOnlyNoFactorIsEnabled(t *testing.T) {
 	listing := csfloatListing{
 		ID:    "789",
 		Price: 70,
@@ -78,6 +98,6 @@ func TestMapListingOpportunityFiltersNoFactor(t *testing.T) {
 
 	_, ok := mapListingOpportunity(listing, ListingsFilters{OnlyNoFactor: true})
 	if ok {
-		t.Fatalf("expected listing to be filtered out when item factor is present")
+		t.Fatalf("expected listing to be filtered out when item factor is positive")
 	}
 }

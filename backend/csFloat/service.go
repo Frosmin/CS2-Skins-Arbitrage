@@ -169,7 +169,7 @@ func mapListingOpportunity(listing csfloatListing, filters ListingsFilters) (Lis
 	}
 
 	itemFactorCents := predictedPriceCents - listing.Reference.BasePrice
-	if filters.OnlyNoFactor && itemFactorCents != 0 {
+	if filters.OnlyNoFactor && itemFactorCents > 0 {
 		return ListingOpportunity{}, false
 	}
 
