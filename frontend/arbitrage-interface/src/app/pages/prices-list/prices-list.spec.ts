@@ -30,6 +30,8 @@ describe('PricesList', () => {
       limit: 50,
       sort: 'best_deal',
       only_no_factor: true,
+      avoid_panic_sells: true,
+      unique_per_skin: true,
     },
     count: 1,
   };
@@ -56,6 +58,8 @@ describe('PricesList', () => {
       limit: 50,
       sort: 'best_deal',
       only_no_factor: true,
+      avoid_panic_sells: true,
+      unique_per_skin: true,
     });
   });
 

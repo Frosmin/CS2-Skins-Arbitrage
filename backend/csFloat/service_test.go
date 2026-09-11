@@ -288,3 +288,103 @@ func TestFetchListingsPaginatesWhenLimitExceeds50(t *testing.T) {
 	}
 }
 
+func TestFetchListingsFiltersOutPanicSells(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := csfloatResponse{
+			Data: []csfloatListing{
+				{
+					ID:        "ump-1",
+					Price:     29,
+					Reference: csfloatReference{BasePrice: 36, PredictedPrice: 36},
+					Item:      csfloatItem{MarketHashName: "UMP-45 | Labyrinth (Minimal Wear)"},
+				},
+				{
+					ID:        "ump-2",
+					Price:     29,
+					Reference: csfloatReference{BasePrice: 36, PredictedPrice: 36},
+					Item:      csfloatItem{MarketHashName: "UMP-45 | Labyrinth (Minimal Wear)"},
+				},
+				{
+					ID:        "ump-3",
+					Price:     29,
+					Reference: csfloatReference{BasePrice: 36, PredictedPrice: 36},
+					Item:      csfloatItem{MarketHashName: "UMP-45 | Labyrinth (Minimal Wear)"},
+				},
+				{
+					ID:        "ak-1",
+					Price:     50,
+					Reference: csfloatReference{BasePrice: 100, PredictedPrice: 100},
+					Item:      csfloatItem{MarketHashName: "AK-47 | Slate (Field-Tested)"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		client:  server.Client(),
+		baseURL: server.URL,
+		apiKey:  "test-api-key",
+	}
+
+	res, err := svc.FetchListings(ListingsFilters{
+		Sort:            "best_deal",
+		AvoidPanicSells: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(res.Items) != 1 {
+		t.Fatalf("expected 1 item (only the isolated quicksell), got %d", len(res.Items))
+	}
+	if res.Items[0].MarketHashName != "AK-47 | Slate (Field-Tested)" {
+		t.Fatalf("expected AK-47, got %s", res.Items[0].MarketHashName)
+	}
+}
+
+func TestFetchListingsDeduplicatesSameSkin(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := csfloatResponse{
+			Data: []csfloatListing{
+				{
+					ID:        "mag-1",
+					Price:     75,
+					Reference: csfloatReference{BasePrice: 100, PredictedPrice: 100},
+					Item:      csfloatItem{MarketHashName: "M4A4 | Magnesium"},
+				},
+				{
+					ID:        "mag-2",
+					Price:     50,
+					Reference: csfloatReference{BasePrice: 100, PredictedPrice: 100},
+					Item:      csfloatItem{MarketHashName: "M4A4 | Magnesium"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		client:  server.Client(),
+		baseURL: server.URL,
+		apiKey:  "test-api-key",
+	}
+
+	res, err := svc.FetchListings(ListingsFilters{
+		Sort:          "best_deal",
+		UniquePerSkin: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(res.Items) != 1 {
+		t.Fatalf("expected 1 deduplicated item, got %d", len(res.Items))
+	}
+	if res.Items[0].ID != "mag-2" || res.Items[0].CSFloatPrice != 0.50 {
+		t.Fatalf("expected best deal (mag-2 @ $0.50), got %s @ $%.2f", res.Items[0].ID, res.Items[0].CSFloatPrice)
+	}
+}
+

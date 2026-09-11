@@ -53,6 +53,14 @@ func TestListingsHandlerUsesDefaults(t *testing.T) {
 	if !service.filters.OnlyNoFactor {
 		t.Fatalf("expected only_no_factor default true")
 	}
+
+	if !service.filters.AvoidPanicSells {
+		t.Fatalf("expected avoid_panic_sells default true")
+	}
+
+	if !service.filters.UniquePerSkin {
+		t.Fatalf("expected unique_per_skin default true")
+	}
 }
 
 func TestListingsHandlerRejectsInvalidParams(t *testing.T) {

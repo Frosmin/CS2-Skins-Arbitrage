@@ -47,8 +47,8 @@
     </div>
 
     <div class="filter-group">
-      <label for="filter-limit">Límite (máx 200)</label>
-      <input id="filter-limit" type="number" min="1" max="200" step="1" [(ngModel)]="filters.limit" placeholder="50" />
+      <label for="filter-limit">Límite (máx 500)</label>
+      <input id="filter-limit" type="number" min="1" max="500" step="1" [(ngModel)]="filters.limit" placeholder="50" />
     </div>
 
     <div class="filter-group">
@@ -61,10 +61,22 @@
     </div>
 
     <div class="filter-group checkbox-group">
-      <label class="checkbox-container">
+      <label class="checkbox-container" title="Descarta skins cuyo factor sea positivo">
         <input type="checkbox" [(ngModel)]="filters.only_no_factor" />
         <span class="custom-checkbox"></span>
         <span class="checkbox-label">Solo sin Item Factor</span>
+      </label>
+
+      <label class="checkbox-container" title="Descarta armas con ventas masivas al precio mínimo (precio en caída)">
+        <input type="checkbox" [(ngModel)]="filters.avoid_panic_sells" />
+        <span class="custom-checkbox"></span>
+        <span class="checkbox-label">Evitar armas en caída</span>
+      </label>
+
+      <label class="checkbox-container" title="Muestra solo la mejor oferta por cada skin distinta">
+        <input type="checkbox" [(ngModel)]="filters.unique_per_skin" />
+        <span class="custom-checkbox"></span>
+        <span class="checkbox-label">1 por arma</span>
       </label>
     </div>
 

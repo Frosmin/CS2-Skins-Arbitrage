@@ -4,6 +4,8 @@ export interface ListingsFilters {
   limit: number;
   sort: string;
   only_no_factor: boolean;
+  avoid_panic_sells: boolean;
+  unique_per_skin: boolean;
 }
 
 export interface ListingOpportunity {
@@ -31,4 +33,6 @@ export const DEFAULT_FILTERS: ListingsFilters = {
   limit: 50,
   sort: 'best_deal',
   only_no_factor: true,
+  avoid_panic_sells: true,
+  unique_per_skin: true,
 };
