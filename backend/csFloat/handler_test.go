@@ -10,9 +10,10 @@ import (
 )
 
 type stubListingsService struct {
-	filters  ListingsFilters
-	response ListingsResponse
-	err      error
+	filters         ListingsFilters
+	response        ListingsResponse
+	historyResponse HistoryData
+	err             error
 }
 
 func (s *stubListingsService) FetchListings(filters ListingsFilters) (ListingsResponse, error) {
@@ -21,6 +22,13 @@ func (s *stubListingsService) FetchListings(filters ListingsFilters) (ListingsRe
 		return ListingsResponse{}, s.err
 	}
 	return s.response, nil
+}
+
+func (s *stubListingsService) FetchHistory(name string) (HistoryData, error) {
+	if s.err != nil {
+		return HistoryData{}, s.err
+	}
+	return s.historyResponse, nil
 }
 
 func TestListingsHandlerUsesDefaults(t *testing.T) {

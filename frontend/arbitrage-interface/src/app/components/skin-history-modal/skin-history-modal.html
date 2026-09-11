@@ -1,0 +1,133 @@
+@if (isOpen()) {
+  <div class="modal-backdrop" (click)="handleBackdropClick($event)">
+    <div class="modal-container" role="dialog" aria-modal="true">
+      <!-- Modal Header -->
+      <header class="modal-header">
+        <div class="header-left">
+          @if (iconUrl()) {
+            <img [src]="iconUrl()" [alt]="skinName()" class="modal-skin-img" />
+          }
+          <div>
+            <h2 class="modal-skin-title">{{ skinName() }}</h2>
+            @if (currentPrice() > 0) {
+              <span class="modal-skin-price">Precio actual: ${{ currentPrice() | number: '1.2-2' }} USD</span>
+            }
+          </div>
+        </div>
+
+        <button type="button" class="modal-close" (click)="close.emit()" aria-label="Cerrar">
+          &times;
+        </button>
+      </header>
+
+      <!-- Navigation Tabs & Range Controls -->
+      <nav class="modal-nav">
+        <div class="tabs-group">
+          <button
+            type="button"
+            class="tab-btn"
+            [class.active]="activeTab() === 'graph'"
+            (click)="setTab('graph')"
+          >
+            Gráfica de Ventas
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            [class.active]="activeTab() === 'sales'"
+            (click)="setTab('sales')"
+          >
+            Últimas Ventas
+          </button>
+        </div>
+
+        @if (activeTab() === 'graph') {
+          <div class="range-group">
+            <button
+              type="button"
+              class="range-btn"
+              [class.active]="activeRange() === '1M'"
+              (click)="setRange('1M')"
+            >
+              1M
+            </button>
+            <button
+              type="button"
+              class="range-btn"
+              [class.active]="activeRange() === '3M'"
+              (click)="setRange('3M')"
+            >
+              3M
+            </button>
+            <button
+              type="button"
+              class="range-btn"
+              [class.active]="activeRange() === '1Y'"
+              (click)="setRange('1Y')"
+            >
+              1Y
+            </button>
+            <button
+              type="button"
+              class="range-btn"
+              [class.active]="activeRange() === 'ALL'"
+              (click)="setRange('ALL')"
+            >
+              ALL
+            </button>
+          </div>
+        }
+      </nav>
+
+      <!-- Modal Body -->
+      <div class="modal-body">
+        @if (loading()) {
+          <div class="modal-state">
+            <div class="spinner"></div>
+            <p>Consultando historial de ventas en CSFloat...</p>
+          </div>
+        } @else if (errorMessage()) {
+          <div class="modal-state modal-error">
+            <p>{{ errorMessage() }}</p>
+          </div>
+        } @else if (activeTab() === 'graph') {
+          <div class="chart-wrapper">
+            <canvas #chartCanvas></canvas>
+          </div>
+        } @else {
+          <!-- Latest Sales Table -->
+          <div class="sales-list-wrapper">
+            @if (historyData()?.sales?.length) {
+              <table class="sales-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Float</th>
+                    <th class="align-right">Precio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (sale of historyData()?.sales; track sale.id) {
+                    <tr>
+                      <td>{{ sale.sold_at | date: 'dd/MM/yyyy HH:mm' }}</td>
+                      <td>
+                        <span class="wear-pill">{{ sale.wear | number: '1.4-4' }}</span>
+                      </td>
+                      <td class="align-right">
+                        <strong class="price-val">${{ sale.price_usd | number: '1.2-2' }}</strong>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <div class="modal-state">
+                <p>No se encontraron ventas recientes registradas.</p>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}

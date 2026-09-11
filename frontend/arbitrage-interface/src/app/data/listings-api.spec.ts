@@ -34,6 +34,7 @@ describe('ListingsApi', () => {
         only_no_factor: true,
         avoid_panic_sells: true,
         unique_per_skin: true,
+        validate_history: true,
       })
       .subscribe();
 
@@ -46,7 +47,21 @@ describe('ListingsApi', () => {
     expect(request.request.params.get('only_no_factor')).toBe('true');
     expect(request.request.params.get('avoid_panic_sells')).toBe('true');
     expect(request.request.params.get('unique_per_skin')).toBe('true');
+    expect(request.request.params.get('validate_history')).toBe('true');
 
     request.flush({ items: [], filters: {}, count: 0 });
+  });
+
+  it('fetches skin history by name', () => {
+    service.getSkinHistory('AK-47 | Slate (Field-Tested)').subscribe();
+
+    const request = httpMock.expectOne((req) => req.url === 'http://localhost:8080/api/history');
+
+    expect(request.request.params.get('name')).toBe('AK-47 | Slate (Field-Tested)');
+    request.flush({
+      market_hash_name: 'AK-47 | Slate (Field-Tested)',
+      graph: [],
+      sales: [],
+    });
   });
 });

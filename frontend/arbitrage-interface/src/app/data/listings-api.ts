@@ -1,12 +1,16 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 
-import { ListingsFilters, ListingsResponse } from '../types/listings';
+import {
+  ListingsFilters,
+  ListingsResponse,
+  SkinHistoryResponse,
+} from '../types/listings';
 
 @Injectable({ providedIn: 'root' })
 export class ListingsApi {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = 'http://localhost:8080/api/listings';
+  private readonly baseUrl = 'http://localhost:8080/api';
 
   getListings(filters: ListingsFilters) {
     const params = new HttpParams({
@@ -18,9 +22,20 @@ export class ListingsApi {
         only_no_factor: String(filters.only_no_factor),
         avoid_panic_sells: String(filters.avoid_panic_sells),
         unique_per_skin: String(filters.unique_per_skin),
+        validate_history: String(filters.validate_history),
       },
     });
 
-    return this.http.get<ListingsResponse>(this.baseUrl, { params });
+    return this.http.get<ListingsResponse>(`${this.baseUrl}/listings`, { params });
+  }
+
+  getSkinHistory(marketHashName: string) {
+    const params = new HttpParams({
+      fromObject: {
+        name: marketHashName,
+      },
+    });
+
+    return this.http.get<SkinHistoryResponse>(`${this.baseUrl}/history`, { params });
   }
 }

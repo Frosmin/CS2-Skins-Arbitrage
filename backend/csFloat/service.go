@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -25,6 +26,7 @@ const (
 	MaxAllowedLimit = 100000
 	CSFloatMaxBatch = 50
 	DefaultSort     = "best_deal"
+	HistoryCacheTTL = 30 * time.Minute
 )
 
 var ErrMissingAPIKey = errors.New("la variable de entorno CSFLOAT_API_KEY está vacía")
@@ -37,6 +39,7 @@ type ListingsFilters struct {
 	OnlyNoFactor    bool    `json:"only_no_factor"`
 	AvoidPanicSells bool    `json:"avoid_panic_sells"`
 	UniquePerSkin   bool    `json:"unique_per_skin"`
+	ValidateHistory bool    `json:"validate_history"`
 }
 
 type ListingOpportunity struct {
@@ -49,7 +52,45 @@ type ListingOpportunity struct {
 	PredictedPrice      float64 `json:"predicted_price"`
 	ItemFactor          float64 `json:"item_factor"`
 	DiscountPercent     float64 `json:"discount_percent"`
+	HistoricalAvg       float64 `json:"historical_avg,omitempty"`
 	PurchaseURL         string  `json:"purchase_url"`
+}
+
+type GraphPoint struct {
+	Day         string  `json:"day"`
+	AvgPrice    float64 `json:"avg_price"`
+	AvgPriceUSD float64 `json:"avg_price_usd"`
+	Count       int     `json:"count"`
+}
+
+type SaleRecord struct {
+	ID       string  `json:"id"`
+	Price    int64   `json:"price"`
+	PriceUSD float64 `json:"price_usd"`
+	SoldAt   string  `json:"sold_at"`
+	Wear     float64 `json:"wear"`
+	IconURL  string  `json:"icon_url"`
+}
+
+type rawSaleItem struct {
+	ID     string `json:"id"`
+	Price  int64  `json:"price"`
+	SoldAt string `json:"sold_at"`
+	Item   struct {
+		FloatValue float64 `json:"float_value"`
+		IconURL    string  `json:"icon_url"`
+	} `json:"item"`
+}
+
+type HistoryData struct {
+	MarketHashName string       `json:"market_hash_name"`
+	Graph          []GraphPoint `json:"graph"`
+	Sales          []SaleRecord `json:"sales"`
+}
+
+type cacheEntry struct {
+	data      HistoryData
+	expiresAt time.Time
 }
 
 type ListingsResponse struct {
@@ -60,12 +101,16 @@ type ListingsResponse struct {
 
 type ListingsService interface {
 	FetchListings(filters ListingsFilters) (ListingsResponse, error)
+	FetchHistory(name string) (HistoryData, error)
 }
 
 type Service struct {
-	client  *http.Client
-	baseURL string
-	apiKey  string
+	client     *http.Client
+	baseURL    string
+	historyURL string
+	apiKey     string
+	cache      map[string]cacheEntry
+	cacheMu    sync.RWMutex
 }
 
 type csfloatResponse struct {
@@ -98,10 +143,144 @@ func NewService(client *http.Client) *Service {
 	}
 
 	return &Service{
-		client:  client,
-		baseURL: "https://csfloat.com/api/v1/listings",
-		apiKey:  os.Getenv("CSFLOAT_API_KEY"),
+		client:     client,
+		baseURL:    "https://csfloat.com/api/v1/listings",
+		historyURL: "https://csfloat.com/api/v1/history",
+		apiKey:     os.Getenv("CSFLOAT_API_KEY"),
+		cache:      make(map[string]cacheEntry),
 	}
+}
+
+func NewServiceWithBaseURL(client *http.Client, baseURL, apiKey string) *Service {
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	historyURL := baseURL
+	if !strings.Contains(baseURL, "/history") {
+		historyURL = baseURL + "/history"
+	}
+	return &Service{
+		client:     client,
+		baseURL:    baseURL,
+		historyURL: historyURL,
+		apiKey:     apiKey,
+		cache:      make(map[string]cacheEntry),
+	}
+}
+
+func (s *Service) FetchHistory(name string) (HistoryData, error) {
+	if s.apiKey == "" {
+		return HistoryData{}, ErrMissingAPIKey
+	}
+
+	s.cacheMu.RLock()
+	if entry, ok := s.cache[name]; ok && time.Now().Before(entry.expiresAt) {
+		s.cacheMu.RUnlock()
+		return entry.data, nil
+	}
+	s.cacheMu.RUnlock()
+
+	encodedName := url.PathEscape(name)
+
+	graphURL := fmt.Sprintf("%s/%s/graph", s.historyURL, encodedName)
+	graphReq, err := http.NewRequest(http.MethodGet, graphURL, nil)
+	if err != nil {
+		return HistoryData{}, fmt.Errorf("error al crear petición de gráfica: %w", err)
+	}
+	graphReq.Header.Set("Authorization", s.apiKey)
+	graphReq.Header.Set("Accept", "application/json")
+	graphReq.Header.Set("User-Agent", "CS2-Arbitrage-App/2.0")
+
+	graphResp, err := s.client.Do(graphReq)
+	if err != nil {
+		return HistoryData{}, fmt.Errorf("error al conectar con API de historial (gráfica): %w", err)
+	}
+	defer graphResp.Body.Close()
+
+	var rawGraph []GraphPoint
+	if graphResp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(graphResp.Body).Decode(&rawGraph)
+	}
+
+	for i := range rawGraph {
+		rawGraph[i].AvgPriceUSD = roundToTwo(rawGraph[i].AvgPrice / 100.0)
+	}
+
+	salesURL := fmt.Sprintf("%s/%s/sales", s.historyURL, encodedName)
+	salesReq, err := http.NewRequest(http.MethodGet, salesURL, nil)
+	if err != nil {
+		return HistoryData{}, fmt.Errorf("error al crear petición de ventas: %w", err)
+	}
+	salesReq.Header.Set("Authorization", s.apiKey)
+	salesReq.Header.Set("Accept", "application/json")
+	salesReq.Header.Set("User-Agent", "CS2-Arbitrage-App/2.0")
+
+	salesResp, err := s.client.Do(salesReq)
+	if err != nil {
+		return HistoryData{}, fmt.Errorf("error al conectar con API de historial (ventas): %w", err)
+	}
+	defer salesResp.Body.Close()
+
+	var rawSales []rawSaleItem
+	if salesResp.StatusCode == http.StatusOK {
+		_ = json.NewDecoder(salesResp.Body).Decode(&rawSales)
+	}
+
+	sales := make([]SaleRecord, 0, len(rawSales))
+	for _, item := range rawSales {
+		sales = append(sales, SaleRecord{
+			ID:       item.ID,
+			Price:    item.Price,
+			PriceUSD: roundToTwo(centsToUSD(item.Price)),
+			SoldAt:   item.SoldAt,
+			Wear:     item.Item.FloatValue,
+			IconURL:  buildItemImageURL(item.Item.IconURL),
+		})
+	}
+
+	data := HistoryData{
+		MarketHashName: name,
+		Graph:          rawGraph,
+		Sales:          sales,
+	}
+
+	s.cacheMu.Lock()
+	s.cache[name] = cacheEntry{
+		data:      data,
+		expiresAt: time.Now().Add(HistoryCacheTTL),
+	}
+	s.cacheMu.Unlock()
+
+	return data, nil
+}
+
+func (s *Service) calculateRecentAverage(name string) (float64, bool) {
+	history, err := s.FetchHistory(name)
+	if err != nil || len(history.Graph) == 0 {
+		return 0, false
+	}
+	cutoff := time.Now().AddDate(0, 0, -7)
+	var sum float64
+	var count int
+	for _, pt := range history.Graph {
+		t, err := time.Parse(time.RFC3339, pt.Day)
+		if err == nil && t.After(cutoff) && pt.AvgPriceUSD > 0 {
+			sum += pt.AvgPriceUSD
+			count++
+		}
+	}
+	if count == 0 {
+		for i := len(history.Graph) - 1; i >= 0 && count < 3; i-- {
+			if history.Graph[i].AvgPriceUSD > 0 {
+				sum += history.Graph[i].AvgPriceUSD
+				count++
+			}
+		}
+	}
+	if count == 0 {
+		return 0, false
+	}
+	return roundToTwo(sum / float64(count)), true
 }
 
 func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, error) {
@@ -194,6 +373,26 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		sort.SliceStable(items, func(i, j int) bool {
 			return items[i].DiscountPercent > items[j].DiscountPercent
 		})
+	}
+
+	if filters.ValidateHistory && len(items) > 0 {
+		validated := make([]ListingOpportunity, 0, len(items))
+		topCandidates := items
+		if len(topCandidates) > 10 {
+			topCandidates = topCandidates[:10]
+		}
+
+		for _, opp := range topCandidates {
+			avg7d, ok := s.calculateRecentAverage(opp.MarketHashName)
+			if ok {
+				if opp.CSFloatPrice >= avg7d {
+					continue
+				}
+				opp.HistoricalAvg = avg7d
+			}
+			validated = append(validated, opp)
+		}
+		items = validated
 	}
 
 	if len(items) > targetLimit {

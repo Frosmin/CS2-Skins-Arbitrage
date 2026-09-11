@@ -530,6 +530,19 @@ select {
   border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
+.history-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  margin-left: auto;
+}
+
 /* ==========================================================================
    Weapon Visual Image
    ========================================================================== */
@@ -731,6 +744,33 @@ select {
 
 .card-action {
   margin-top: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.btn-graph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(147, 197, 253, 0.08);
+  border: 1px solid rgba(147, 197, 253, 0.25);
+  color: #93c5fd;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(147, 197, 253, 0.2);
+    border-color: #93c5fd;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(147, 197, 253, 0.25);
+  }
 }
 
 .btn-buy {
@@ -738,7 +778,7 @@ select {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
   box-sizing: border-box;
   padding: 10px 16px;
   border-radius: 10px;

@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { SkinHistoryModal } from '../../components/skin-history-modal/skin-history-modal';
 import { ListingsApi } from '../../data/listings-api';
 import {
   DEFAULT_FILTERS,
@@ -12,7 +13,7 @@ import {
 
 @Component({
   selector: 'app-prices-list',
-  imports: [FormsModule, DecimalPipe],
+  imports: [FormsModule, DecimalPipe, SkinHistoryModal],
   templateUrl: './prices-list.html',
   styleUrl: './prices-list.scss',
 })
@@ -24,6 +25,8 @@ export class PricesList implements OnInit {
   protected readonly total = signal(0);
   protected readonly activeFilters = signal<ListingsFilters>({ ...DEFAULT_FILTERS });
   protected readonly discountSortDirection = signal<'desc' | 'asc'>('desc');
+  protected readonly selectedSkinForHistory = signal<ListingOpportunity | null>(null);
+  protected readonly isHistoryModalOpen = signal(false);
 
   protected readonly sortedItems = computed(() => {
     const list = [...this.items()];
@@ -38,6 +41,16 @@ export class PricesList implements OnInit {
 
   protected toggleDiscountSort(): void {
     this.discountSortDirection.update((current) => (current === 'desc' ? 'asc' : 'desc'));
+  }
+
+  protected openHistory(item: ListingOpportunity): void {
+    this.selectedSkinForHistory.set(item);
+    this.isHistoryModalOpen.set(true);
+  }
+
+  protected closeHistory(): void {
+    this.isHistoryModalOpen.set(false);
+    this.selectedSkinForHistory.set(null);
   }
 
   private readonly api = inject(ListingsApi);

@@ -8,7 +8,10 @@ import { PricesList } from './prices-list';
 
 describe('PricesList', () => {
   let fixture: ComponentFixture<PricesList>;
-  let api: { getListings: ReturnType<typeof vi.fn> };
+  let api: {
+    getListings: ReturnType<typeof vi.fn>;
+    getSkinHistory: ReturnType<typeof vi.fn>;
+  };
 
   const response: ListingsResponse = {
     items: [
@@ -32,6 +35,7 @@ describe('PricesList', () => {
       only_no_factor: true,
       avoid_panic_sells: true,
       unique_per_skin: true,
+      validate_history: false,
     },
     count: 1,
   };
@@ -39,6 +43,7 @@ describe('PricesList', () => {
   beforeEach(async () => {
     api = {
       getListings: vi.fn().mockReturnValue(of(response)),
+      getSkinHistory: vi.fn().mockReturnValue(of({ graph: [], sales: [] })),
     };
 
     await TestBed.configureTestingModule({
@@ -60,6 +65,7 @@ describe('PricesList', () => {
       only_no_factor: true,
       avoid_panic_sells: true,
       unique_per_skin: true,
+      validate_history: false,
     });
   });
 
@@ -225,5 +231,41 @@ describe('PricesList', () => {
       fixture.nativeElement.querySelectorAll('.skin-name') as NodeListOf<HTMLElement>,
     ).map((el) => el.textContent?.trim());
     expect(cardNames).toEqual(['Skin 50 Percent', 'Skin 10 Percent']);
+  });
+
+  it('opens history modal when clicking the Gráfica button', async () => {
+    fixture.detectChanges();
+
+    const graphButton = fixture.nativeElement.querySelector('.btn-graph') as HTMLButtonElement;
+    expect(graphButton).toBeTruthy();
+
+    graphButton.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const modal = fixture.nativeElement.querySelector('app-skin-history-modal');
+    expect(modal).toBeTruthy();
+    expect(api.getSkinHistory).toHaveBeenCalledWith('AK-47 | Slate (Field-Tested)');
+  });
+
+  it('renders historical_avg badge when item contains historical_avg', () => {
+    api.getListings.mockReturnValue(
+      of({
+        ...response,
+        items: [
+          {
+            ...response.items[0],
+            historical_avg: 1.25,
+          },
+        ],
+      }),
+    );
+
+    fixture = TestBed.createComponent(PricesList);
+    fixture.detectChanges();
+
+    const badge = fixture.nativeElement.querySelector('.history-pill') as HTMLElement;
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toContain('7d: $1.25');
   });
 });

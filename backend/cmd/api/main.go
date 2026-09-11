@@ -20,6 +20,11 @@ func main() {
 		c.Status(http.StatusNoContent)
 	})
 
+	router.GET("/api/history", handler.GetHistory)
+	router.OPTIONS("/api/history", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
 	if err := router.Run(":8080"); err != nil {
 		panic(err)
 	}

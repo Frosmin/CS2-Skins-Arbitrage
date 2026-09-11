@@ -36,6 +36,26 @@ func (h *Handler) GetListings(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func (h *Handler) GetHistory(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "el parámetro 'name' es obligatorio"})
+		return
+	}
+
+	history, err := h.service.FetchHistory(name)
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, ErrMissingAPIKey) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, history)
+}
+
 func parseFilters(c *gin.Context) (ListingsFilters, error) {
 	minPrice, err := parseFloatQuery(c, "min_price", DefaultMinPrice)
 	if err != nil {
@@ -73,6 +93,11 @@ func parseFilters(c *gin.Context) (ListingsFilters, error) {
 		return ListingsFilters{}, err
 	}
 
+	validateHistory, err := parseBoolQuery(c, "validate_history", false)
+	if err != nil {
+		return ListingsFilters{}, err
+	}
+
 	return ListingsFilters{
 		MinPrice:        minPrice,
 		MaxPrice:        maxPrice,
@@ -81,6 +106,7 @@ func parseFilters(c *gin.Context) (ListingsFilters, error) {
 		OnlyNoFactor:    onlyNoFactor,
 		AvoidPanicSells: avoidPanicSells,
 		UniquePerSkin:   uniquePerSkin,
+		ValidateHistory: validateHistory,
 	}, nil
 }
 
