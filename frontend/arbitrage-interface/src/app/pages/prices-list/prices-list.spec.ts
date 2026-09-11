@@ -109,4 +109,117 @@ describe('PricesList', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Cargando oportunidades...');
   });
+
+  it('renders listings ordered by highest discount percent first by default', () => {
+    api.getListings.mockReturnValue(
+      of({
+        ...response,
+        items: [
+          {
+            id: '1',
+            market_hash_name: 'Skin 10 Percent',
+            wear: 0.15,
+            csfloat_price: 90,
+            steam_reference_price: 100,
+            predicted_price: 100,
+            item_factor: 0,
+            discount_percent: 10.0,
+            purchase_url: 'https://csfloat.com/item/1',
+          },
+          {
+            id: '2',
+            market_hash_name: 'Skin 50 Percent',
+            wear: 0.2,
+            csfloat_price: 50,
+            steam_reference_price: 100,
+            predicted_price: 100,
+            item_factor: 0,
+            discount_percent: 50.0,
+            purchase_url: 'https://csfloat.com/item/2',
+          },
+          {
+            id: '3',
+            market_hash_name: 'Skin 25 Percent',
+            wear: 0.3,
+            csfloat_price: 75,
+            steam_reference_price: 100,
+            predicted_price: 100,
+            item_factor: 0,
+            discount_percent: 25.0,
+            purchase_url: 'https://csfloat.com/item/3',
+          },
+        ],
+        count: 3,
+      }),
+    );
+
+    fixture = TestBed.createComponent(PricesList);
+    fixture.detectChanges();
+
+    const cardNames = Array.from(
+      fixture.nativeElement.querySelectorAll('.skin-name') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+
+    expect(cardNames).toEqual(['Skin 50 Percent', 'Skin 25 Percent', 'Skin 10 Percent']);
+  });
+
+  it('toggles discount sorting when clicking the discount sort button', () => {
+    api.getListings.mockReturnValue(
+      of({
+        ...response,
+        items: [
+          {
+            id: '1',
+            market_hash_name: 'Skin 10 Percent',
+            wear: 0.15,
+            csfloat_price: 90,
+            steam_reference_price: 100,
+            predicted_price: 100,
+            item_factor: 0,
+            discount_percent: 10.0,
+            purchase_url: 'https://csfloat.com/item/1',
+          },
+          {
+            id: '2',
+            market_hash_name: 'Skin 50 Percent',
+            wear: 0.2,
+            csfloat_price: 50,
+            steam_reference_price: 100,
+            predicted_price: 100,
+            item_factor: 0,
+            discount_percent: 50.0,
+            purchase_url: 'https://csfloat.com/item/2',
+          },
+        ],
+        count: 2,
+      }),
+    );
+
+    fixture = TestBed.createComponent(PricesList);
+    fixture.detectChanges();
+
+    const sortButton = fixture.nativeElement.querySelector('.sort-toggle-button') as HTMLButtonElement;
+    expect(sortButton).toBeTruthy();
+
+    let cardNames = Array.from(
+      fixture.nativeElement.querySelectorAll('.skin-name') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+    expect(cardNames).toEqual(['Skin 50 Percent', 'Skin 10 Percent']);
+
+    sortButton.click();
+    fixture.detectChanges();
+
+    cardNames = Array.from(
+      fixture.nativeElement.querySelectorAll('.skin-name') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+    expect(cardNames).toEqual(['Skin 10 Percent', 'Skin 50 Percent']);
+
+    sortButton.click();
+    fixture.detectChanges();
+
+    cardNames = Array.from(
+      fixture.nativeElement.querySelectorAll('.skin-name') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+    expect(cardNames).toEqual(['Skin 50 Percent', 'Skin 10 Percent']);
+  });
 });

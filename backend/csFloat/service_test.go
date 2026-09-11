@@ -1,6 +1,11 @@
 package csfloat
 
-import "testing"
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestMapListingOpportunityUsesPredictedPriceAndDiscount(t *testing.T) {
 	listing := csfloatListing{
@@ -99,5 +104,118 @@ func TestMapListingOpportunityFiltersPositiveFactorWhenOnlyNoFactorIsEnabled(t *
 	_, ok := mapListingOpportunity(listing, ListingsFilters{OnlyNoFactor: true})
 	if ok {
 		t.Fatalf("expected listing to be filtered out when item factor is positive")
+	}
+}
+
+func TestMapListingOpportunityMapsIconURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawIcon  string
+		expected string
+	}{
+		{
+			name:     "Steam icon hash",
+			rawIcon:  "-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhjxszYfi5H5di5mr-HnvD8J_WCkmkEvp0pi7zDodv3jAHj-UM5ZGr7INfHJAc9MlzV-FK_kO281pa_ot2XnrA-A3kA",
+			expected: "https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhjxszYfi5H5di5mr-HnvD8J_WCkmkEvp0pi7zDodv3jAHj-UM5ZGr7INfHJAc9MlzV-FK_kO281pa_ot2XnrA-A3kA",
+		},
+		{
+			name:     "Already full URL",
+			rawIcon:  "https://example.com/weapon.png",
+			expected: "https://example.com/weapon.png",
+		},
+		{
+			name:     "Empty icon",
+			rawIcon:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listing := csfloatListing{
+				ID:    "111",
+				Price: 50,
+				Reference: csfloatReference{
+					BasePrice:      100,
+					PredictedPrice: 100,
+				},
+				Item: csfloatItem{
+					MarketHashName: "AK-47 | Redline (Field-Tested)",
+					Wear:           0.22,
+					IconURL:        tt.rawIcon,
+				},
+			}
+
+			opportunity, ok := mapListingOpportunity(listing, ListingsFilters{OnlyNoFactor: false})
+			if !ok {
+				t.Fatalf("expected listing to be valid")
+			}
+			if opportunity.IconURL != tt.expected {
+				t.Fatalf("expected icon_url '%s', got '%s'", tt.expected, opportunity.IconURL)
+			}
+		})
+	}
+}
+
+func TestFetchListingsOrdersByHighestDiscountFirst(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := csfloatResponse{
+			Data: []csfloatListing{
+				{
+					ID:    "item-1",
+					Price: 90,
+					Reference: csfloatReference{
+						BasePrice:      100,
+						PredictedPrice: 100,
+					},
+					Item: csfloatItem{MarketHashName: "Skin 1"},
+				},
+				{
+					ID:    "item-2",
+					Price: 50,
+					Reference: csfloatReference{
+						BasePrice:      100,
+						PredictedPrice: 100,
+					},
+					Item: csfloatItem{MarketHashName: "Skin 2"},
+				},
+				{
+					ID:    "item-3",
+					Price: 75,
+					Reference: csfloatReference{
+						BasePrice:      100,
+						PredictedPrice: 100,
+					},
+					Item: csfloatItem{MarketHashName: "Skin 3"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		client:  server.Client(),
+		baseURL: server.URL,
+		apiKey:  "test-api-key",
+	}
+
+	res, err := svc.FetchListings(ListingsFilters{Sort: "best_deal"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(res.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(res.Items))
+	}
+
+	if res.Items[0].ID != "item-2" || res.Items[0].DiscountPercent != 50.0 {
+		t.Fatalf("expected item-2 with 50%% discount first, got %s (%.2f%%)", res.Items[0].ID, res.Items[0].DiscountPercent)
+	}
+	if res.Items[1].ID != "item-3" || res.Items[1].DiscountPercent != 25.0 {
+		t.Fatalf("expected item-3 with 25%% discount second, got %s (%.2f%%)", res.Items[1].ID, res.Items[1].DiscountPercent)
+	}
+	if res.Items[2].ID != "item-1" || res.Items[2].DiscountPercent != 10.0 {
+		t.Fatalf("expected item-1 with 10%% discount third, got %s (%.2f%%)", res.Items[2].ID, res.Items[2].DiscountPercent)
 	}
 }

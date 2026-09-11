@@ -10,6 +10,7 @@ export interface ListingOpportunity {
   id: string;
   market_hash_name: string;
   wear: number;
+  icon_url?: string;
   csfloat_price: number;
   steam_reference_price: number;
   predicted_price: number;

@@ -8,11 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
+
+const steamImageBaseURL = "https://community.cloudflare.steamstatic.com/economy/image/"
 
 const (
 	DefaultMinPrice = 0.03
@@ -35,6 +39,7 @@ type ListingOpportunity struct {
 	ID                  string  `json:"id"`
 	MarketHashName      string  `json:"market_hash_name"`
 	Wear                float64 `json:"wear"`
+	IconURL             string  `json:"icon_url"`
 	CSFloatPrice        float64 `json:"csfloat_price"`
 	SteamReferencePrice float64 `json:"steam_reference_price"`
 	PredictedPrice      float64 `json:"predicted_price"`
@@ -78,6 +83,7 @@ type csfloatReference struct {
 type csfloatItem struct {
 	MarketHashName string  `json:"market_hash_name"`
 	Wear           float64 `json:"float_value"`
+	IconURL        string  `json:"icon_url"`
 }
 
 func NewService(client *http.Client) *Service {
@@ -135,6 +141,12 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		}
 	}
 
+	if filters.Sort == "best_deal" || filters.Sort == "" {
+		sort.SliceStable(items, func(i, j int) bool {
+			return items[i].DiscountPercent > items[j].DiscountPercent
+		})
+	}
+
 	return ListingsResponse{
 		Items:   items,
 		Filters: filters,
@@ -183,6 +195,7 @@ func mapListingOpportunity(listing csfloatListing, filters ListingsFilters) (Lis
 		ID:                  listing.ID,
 		MarketHashName:      listing.Item.MarketHashName,
 		Wear:                listing.Item.Wear,
+		IconURL:             buildItemImageURL(listing.Item.IconURL),
 		CSFloatPrice:        roundToTwo(csfloatPrice),
 		SteamReferencePrice: roundToTwo(steamReferencePrice),
 		PredictedPrice:      roundToTwo(centsToUSD(predictedPriceCents)),
@@ -190,6 +203,16 @@ func mapListingOpportunity(listing csfloatListing, filters ListingsFilters) (Lis
 		DiscountPercent:     roundToTwo(discountPercent),
 		PurchaseURL:         fmt.Sprintf("https://csfloat.com/item/%s", listing.ID),
 	}, true
+}
+
+func buildItemImageURL(iconURL string) string {
+	if iconURL == "" {
+		return ""
+	}
+	if strings.HasPrefix(iconURL, "http://") || strings.HasPrefix(iconURL, "https://") {
+		return iconURL
+	}
+	return steamImageBaseURL + iconURL
 }
 
 func centsToUSD(cents int64) float64 {
