@@ -1,10 +1,10 @@
-# CS2 Skins Arbitrage Scanner 🎯📈
+# CS2 Skins Arbitrage Scanner 
 
 Una aplicación web full-stack diseñada para identificar oportunidades de **arbitraje y gangas en skins de Counter-Strike 2 (CS2)**, comparando en tiempo real las publicaciones del mercado de **[CSFloat](https://csfloat.com/)** contra los precios de referencia de **Steam**.
 
 ---
 
-## 📑 Tabla de Contenidos
+## Tabla de Contenidos
 
 - [Descripción General](#-descripción-general)
 - [¿Cómo Funciona el Sistema?](#-cómo-funciona-el-sistema)
@@ -27,7 +27,7 @@ Una aplicación web full-stack diseñada para identificar oportunidades de **arb
 
 ---
 
-## 🔍 Descripción General
+## Descripción General
 
 En el mercado de skins de CS2, los precios fluctúan constantemente entre diferentes plataformas. **CS2 Skins Arbitrage** automatiza la búsqueda de publicaciones donde el precio de compra directa en **CSFloat** es significativamente inferior al valor de referencia del mercado de la comunidad de **Steam**.
 
@@ -40,7 +40,7 @@ La plataforma permite a los usuarios:
 
 ---
 
-## ⚙️ ¿Cómo Funciona el Sistema?
+## ¿Cómo Funciona el Sistema?
 
 ### Lógica de Detección de Arbitraje
 
