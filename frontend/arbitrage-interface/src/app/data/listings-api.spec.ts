@@ -32,6 +32,8 @@ describe('ListingsApi', () => {
         limit: 50,
         sort: 'best_deal',
         only_no_factor: true,
+        avoid_panic_sells: true,
+        unique_per_skin: true,
       })
       .subscribe();
 
@@ -42,6 +44,8 @@ describe('ListingsApi', () => {
     expect(request.request.params.get('limit')).toBe('50');
     expect(request.request.params.get('sort')).toBe('best_deal');
     expect(request.request.params.get('only_no_factor')).toBe('true');
+    expect(request.request.params.get('avoid_panic_sells')).toBe('true');
+    expect(request.request.params.get('unique_per_skin')).toBe('true');
 
     request.flush({ items: [], filters: {}, count: 0 });
   });

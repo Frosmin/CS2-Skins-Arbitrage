@@ -63,12 +63,24 @@ func parseFilters(c *gin.Context) (ListingsFilters, error) {
 		return ListingsFilters{}, err
 	}
 
+	avoidPanicSells, err := parseBoolQuery(c, "avoid_panic_sells", true)
+	if err != nil {
+		return ListingsFilters{}, err
+	}
+
+	uniquePerSkin, err := parseBoolQuery(c, "unique_per_skin", true)
+	if err != nil {
+		return ListingsFilters{}, err
+	}
+
 	return ListingsFilters{
-		MinPrice:     minPrice,
-		MaxPrice:     maxPrice,
-		Limit:        limit,
-		Sort:         sort,
-		OnlyNoFactor: onlyNoFactor,
+		MinPrice:        minPrice,
+		MaxPrice:        maxPrice,
+		Limit:           limit,
+		Sort:            sort,
+		OnlyNoFactor:    onlyNoFactor,
+		AvoidPanicSells: avoidPanicSells,
+		UniquePerSkin:   uniquePerSkin,
 	}, nil
 }
 

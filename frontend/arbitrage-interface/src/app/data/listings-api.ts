@@ -16,6 +16,8 @@ export class ListingsApi {
         limit: String(filters.limit),
         sort: filters.sort,
         only_no_factor: String(filters.only_no_factor),
+        avoid_panic_sells: String(filters.avoid_panic_sells),
+        unique_per_skin: String(filters.unique_per_skin),
       },
     });
 

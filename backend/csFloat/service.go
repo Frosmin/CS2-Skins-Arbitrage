@@ -22,7 +22,7 @@ const (
 	DefaultMinPrice = 0.03
 	DefaultMaxPrice = 1.00
 	DefaultLimit    = 50
-	MaxAllowedLimit = 200
+	MaxAllowedLimit = 100000
 	CSFloatMaxBatch = 50
 	DefaultSort     = "best_deal"
 )
@@ -30,11 +30,13 @@ const (
 var ErrMissingAPIKey = errors.New("la variable de entorno CSFLOAT_API_KEY está vacía")
 
 type ListingsFilters struct {
-	MinPrice     float64 `json:"min_price"`
-	MaxPrice     float64 `json:"max_price"`
-	Limit        int     `json:"limit"`
-	Sort         string  `json:"sort"`
-	OnlyNoFactor bool    `json:"only_no_factor"`
+	MinPrice        float64 `json:"min_price"`
+	MaxPrice        float64 `json:"max_price"`
+	Limit           int     `json:"limit"`
+	Sort            string  `json:"sort"`
+	OnlyNoFactor    bool    `json:"only_no_factor"`
+	AvoidPanicSells bool    `json:"avoid_panic_sells"`
+	UniquePerSkin   bool    `json:"unique_per_skin"`
 }
 
 type ListingOpportunity struct {
@@ -114,14 +116,27 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		targetLimit = MaxAllowedLimit
 	}
 
-	var items []ListingOpportunity
+	var rawListings []csfloatListing
 	cursor := ""
 	totalRawFetched := 0
+	maxRawLimit := targetLimit
+	if filters.AvoidPanicSells || filters.UniquePerSkin {
+		maxRawLimit = targetLimit * 3
+		if maxRawLimit < CSFloatMaxBatch*2 {
+			maxRawLimit = CSFloatMaxBatch * 2
+		}
+		if maxRawLimit > MaxAllowedLimit*2 {
+			maxRawLimit = MaxAllowedLimit * 2
+		}
+	}
 
-	for totalRawFetched < targetLimit {
-		batchLimit := targetLimit - totalRawFetched
-		if batchLimit > CSFloatMaxBatch {
-			batchLimit = CSFloatMaxBatch
+	for totalRawFetched < maxRawLimit {
+		batchLimit := CSFloatMaxBatch
+		if !filters.AvoidPanicSells && !filters.UniquePerSkin {
+			remaining := targetLimit - totalRawFetched
+			if remaining < batchLimit {
+				batchLimit = remaining
+			}
 		}
 
 		requestURL, err := buildListingsURL(s.baseURL, filters, batchLimit, cursor)
@@ -160,19 +175,20 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		}
 
 		totalRawFetched += len(payload.Data)
+		rawListings = append(rawListings, payload.Data...)
 
-		for _, listing := range payload.Data {
-			opportunity, ok := mapListingOpportunity(listing, filters)
-			if ok {
-				items = append(items, opportunity)
-			}
+		processed := processAndFilterListings(rawListings, filters)
+		if len(processed) >= targetLimit {
+			break
 		}
 
-		if payload.Cursor == "" || payload.Cursor == cursor || len(payload.Data) < batchLimit {
+		if payload.Cursor == "" || payload.Cursor == cursor {
 			break
 		}
 		cursor = payload.Cursor
 	}
+
+	items := processAndFilterListings(rawListings, filters)
 
 	if filters.Sort == "best_deal" || filters.Sort == "" {
 		sort.SliceStable(items, func(i, j int) bool {
@@ -180,11 +196,88 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		})
 	}
 
+	if len(items) > targetLimit {
+		items = items[:targetLimit]
+	}
+
 	return ListingsResponse{
 		Items:   items,
 		Filters: filters,
 		Count:   len(items),
 	}, nil
+}
+
+type skinGroup struct {
+	minPrice      int64
+	minPriceCount int
+	opportunities []ListingOpportunity
+}
+
+func processAndFilterListings(rawListings []csfloatListing, filters ListingsFilters) []ListingOpportunity {
+	if !filters.AvoidPanicSells && !filters.UniquePerSkin {
+		items := make([]ListingOpportunity, 0, len(rawListings))
+		for _, listing := range rawListings {
+			opp, ok := mapListingOpportunity(listing, filters)
+			if ok {
+				items = append(items, opp)
+			}
+		}
+		return items
+	}
+
+	groups := make(map[string]*skinGroup)
+	order := make([]string, 0)
+
+	for _, listing := range rawListings {
+		opp, ok := mapListingOpportunity(listing, filters)
+		if !ok {
+			continue
+		}
+
+		name := opp.MarketHashName
+		group, exists := groups[name]
+		if !exists {
+			group = &skinGroup{
+				minPrice:      listing.Price,
+				minPriceCount: 1,
+				opportunities: []ListingOpportunity{opp},
+			}
+			groups[name] = group
+			order = append(order, name)
+		} else {
+			group.opportunities = append(group.opportunities, opp)
+			if listing.Price < group.minPrice {
+				group.minPrice = listing.Price
+				group.minPriceCount = 1
+			} else if listing.Price == group.minPrice {
+				group.minPriceCount++
+			}
+		}
+	}
+
+	result := make([]ListingOpportunity, 0, len(groups))
+	for _, name := range order {
+		group := groups[name]
+
+		if filters.AvoidPanicSells && group.minPriceCount >= 3 {
+			continue
+		}
+
+		if filters.UniquePerSkin {
+			best := group.opportunities[0]
+			for _, opp := range group.opportunities[1:] {
+				if opp.DiscountPercent > best.DiscountPercent ||
+					(opp.DiscountPercent == best.DiscountPercent && opp.CSFloatPrice < best.CSFloatPrice) {
+					best = opp
+				}
+			}
+			result = append(result, best)
+		} else {
+			result = append(result, group.opportunities...)
+		}
+	}
+
+	return result
 }
 
 func buildListingsURL(baseURL string, filters ListingsFilters, batchLimit int, cursor string) (string, error) {
