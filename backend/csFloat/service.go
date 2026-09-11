@@ -22,6 +22,8 @@ const (
 	DefaultMinPrice = 0.03
 	DefaultMaxPrice = 1.00
 	DefaultLimit    = 50
+	MaxAllowedLimit = 200
+	CSFloatMaxBatch = 50
 	DefaultSort     = "best_deal"
 )
 
@@ -65,7 +67,8 @@ type Service struct {
 }
 
 type csfloatResponse struct {
-	Data []csfloatListing `json:"data"`
+	Data   []csfloatListing `json:"data"`
+	Cursor string           `json:"cursor"`
 }
 
 type csfloatListing struct {
@@ -104,41 +107,71 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 		return ListingsResponse{}, ErrMissingAPIKey
 	}
 
-	requestURL, err := buildListingsURL(s.baseURL, filters)
-	if err != nil {
-		return ListingsResponse{}, err
+	targetLimit := filters.Limit
+	if targetLimit <= 0 {
+		targetLimit = DefaultLimit
+	} else if targetLimit > MaxAllowedLimit {
+		targetLimit = MaxAllowedLimit
 	}
 
-	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
-	if err != nil {
-		return ListingsResponse{}, fmt.Errorf("error al crear la petición: %w", err)
-	}
+	var items []ListingOpportunity
+	cursor := ""
+	totalRawFetched := 0
 
-	req.Header.Set("Authorization", s.apiKey)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "CS2-Arbitrage-App/2.0")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return ListingsResponse{}, fmt.Errorf("error de conexión con CSFloat: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return ListingsResponse{}, fmt.Errorf("error en la API de CSFloat. Código de estado: %d", resp.StatusCode)
-	}
-
-	var payload csfloatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return ListingsResponse{}, fmt.Errorf("error al decodificar respuesta de CSFloat: %w", err)
-	}
-
-	items := make([]ListingOpportunity, 0, len(payload.Data))
-	for _, listing := range payload.Data {
-		opportunity, ok := mapListingOpportunity(listing, filters)
-		if ok {
-			items = append(items, opportunity)
+	for totalRawFetched < targetLimit {
+		batchLimit := targetLimit - totalRawFetched
+		if batchLimit > CSFloatMaxBatch {
+			batchLimit = CSFloatMaxBatch
 		}
+
+		requestURL, err := buildListingsURL(s.baseURL, filters, batchLimit, cursor)
+		if err != nil {
+			return ListingsResponse{}, err
+		}
+
+		req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+		if err != nil {
+			return ListingsResponse{}, fmt.Errorf("error al crear la petición: %w", err)
+		}
+
+		req.Header.Set("Authorization", s.apiKey)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "CS2-Arbitrage-App/2.0")
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			return ListingsResponse{}, fmt.Errorf("error de conexión con CSFloat: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return ListingsResponse{}, fmt.Errorf("error en la API de CSFloat. Código de estado: %d", resp.StatusCode)
+		}
+
+		var payload csfloatResponse
+		decodeErr := json.NewDecoder(resp.Body).Decode(&payload)
+		resp.Body.Close()
+		if decodeErr != nil {
+			return ListingsResponse{}, fmt.Errorf("error al decodificar respuesta de CSFloat: %w", decodeErr)
+		}
+
+		if len(payload.Data) == 0 {
+			break
+		}
+
+		totalRawFetched += len(payload.Data)
+
+		for _, listing := range payload.Data {
+			opportunity, ok := mapListingOpportunity(listing, filters)
+			if ok {
+				items = append(items, opportunity)
+			}
+		}
+
+		if payload.Cursor == "" || payload.Cursor == cursor || len(payload.Data) < batchLimit {
+			break
+		}
+		cursor = payload.Cursor
 	}
 
 	if filters.Sort == "best_deal" || filters.Sort == "" {
@@ -154,19 +187,22 @@ func (s *Service) FetchListings(filters ListingsFilters) (ListingsResponse, erro
 	}, nil
 }
 
-func buildListingsURL(baseURL string, filters ListingsFilters) (string, error) {
+func buildListingsURL(baseURL string, filters ListingsFilters, batchLimit int, cursor string) (string, error) {
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("error parseando BaseURL: %w", err)
 	}
 
 	query := parsedURL.Query()
-	query.Set("limit", strconv.Itoa(filters.Limit))
+	query.Set("limit", strconv.Itoa(batchLimit))
 	query.Set("sort_by", filters.Sort)
 	query.Set("category", "1")
 	query.Set("type", "buy_now")
 	query.Set("min_price", strconv.FormatInt(int64(filters.MinPrice*100), 10))
 	query.Set("max_price", strconv.FormatInt(int64(filters.MaxPrice*100), 10))
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
 	parsedURL.RawQuery = query.Encode()
 
 	return parsedURL.String(), nil

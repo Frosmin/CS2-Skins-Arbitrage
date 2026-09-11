@@ -51,6 +51,11 @@ func parseFilters(c *gin.Context) (ListingsFilters, error) {
 	if err != nil {
 		return ListingsFilters{}, err
 	}
+	if limit <= 0 {
+		limit = DefaultLimit
+	} else if limit > MaxAllowedLimit {
+		limit = MaxAllowedLimit
+	}
 
 	sort := c.DefaultQuery("sort", DefaultSort)
 	onlyNoFactor, err := parseBoolQuery(c, "only_no_factor", true)

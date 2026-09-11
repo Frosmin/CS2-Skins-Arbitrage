@@ -219,3 +219,72 @@ func TestFetchListingsOrdersByHighestDiscountFirst(t *testing.T) {
 		t.Fatalf("expected item-1 with 10%% discount third, got %s (%.2f%%)", res.Items[2].ID, res.Items[2].DiscountPercent)
 	}
 }
+
+func TestFetchListingsPaginatesWhenLimitExceeds50(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		limit := r.URL.Query().Get("limit")
+		cursor := r.URL.Query().Get("cursor")
+
+		if limit != "50" {
+			t.Errorf("expected batch limit 50, got %s", limit)
+		}
+
+		if requestCount == 1 {
+			if cursor != "" {
+				t.Errorf("expected empty cursor on first request, got %s", cursor)
+			}
+			resp := csfloatResponse{
+				Cursor: "next-cursor-token",
+				Data: []csfloatListing{
+					{
+						ID:    "item-1",
+						Price: 50,
+						Reference: csfloatReference{BasePrice: 100, PredictedPrice: 100},
+						Item: csfloatItem{MarketHashName: "Skin 1"},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		if cursor != "next-cursor-token" {
+			t.Errorf("expected cursor 'next-cursor-token' on second request, got %s", cursor)
+		}
+		resp := csfloatResponse{
+			Cursor: "",
+			Data: []csfloatListing{
+				{
+					ID:    "item-2",
+					Price: 60,
+					Reference: csfloatReference{BasePrice: 100, PredictedPrice: 100},
+					Item: csfloatItem{MarketHashName: "Skin 2"},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		client:  server.Client(),
+		baseURL: server.URL,
+		apiKey:  "test-api-key",
+	}
+
+	res, err := svc.FetchListings(ListingsFilters{Limit: 100, Sort: "best_deal"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if requestCount != 2 {
+		t.Fatalf("expected 2 requests, got %d", requestCount)
+	}
+
+	if len(res.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(res.Items))
+	}
+}
+

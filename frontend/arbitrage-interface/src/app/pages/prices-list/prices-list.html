@@ -47,8 +47,8 @@
     </div>
 
     <div class="filter-group">
-      <label for="filter-limit">Límite</label>
-      <input id="filter-limit" type="number" step="1" [(ngModel)]="filters.limit" placeholder="50" />
+      <label for="filter-limit">Límite (máx 200)</label>
+      <input id="filter-limit" type="number" min="1" max="200" step="1" [(ngModel)]="filters.limit" placeholder="50" />
     </div>
 
     <div class="filter-group">
